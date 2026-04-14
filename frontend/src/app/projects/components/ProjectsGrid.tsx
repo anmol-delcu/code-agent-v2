@@ -188,7 +188,7 @@ export const ProjectsGrid = () => {
               <div className="flex items-center gap-3 mb-1">
                 <h3 className="text-white font-medium text-base truncate">
                   {container.name?.replace("/", "") ||
-                    `dec-nextjs-${container.id.slice(0, 8)}`}
+                    `delcu-${container.id.slice(0, 8)}`}
                 </h3>
                 <span
                   className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${

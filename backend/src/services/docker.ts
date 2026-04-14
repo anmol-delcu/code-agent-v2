@@ -12,10 +12,8 @@ const usedPorts = new Set<number>();
 
 async function getAllAssignedPorts(): Promise<number[]> {
   const containers = await docker.listContainers({ all: true });
-  const projectContainers = containers.filter(
-    (container) =>
-      container.Labels?.project === "december" ||
-      container.Names?.some((name) => name.includes("dec-nextjs-"))
+  const projectContainers = containers.filter((container) =>
+    container.Names?.some((name) => name.replace(/^\//, "").startsWith("delcu-"))
   );
 
   return projectContainers
@@ -68,7 +66,7 @@ export async function buildImage(containerId: string): Promise<string> {
     const dockerfileContent = await getDockerfile();
     await fs.writeFile(path.join(tempDir, "Dockerfile"), dockerfileContent);
 
-    const imageName = `dec-nextjs-${containerId}`;
+    const imageName = `delcu-${containerId}`;
     console.log(`Building image: ${imageName}`);
 
     const tarStream = await docker.buildImage(
@@ -127,7 +125,7 @@ export async function createContainer(
   imageName: string,
   containerId: string
 ): Promise<{ container: Docker.Container; port: number }> {
-  const containerName = `dec-nextjs-${containerId}`;
+  const containerName = `delcu-${containerId}`;
   const assignedPort = await findAvailablePort();
 
   console.log(`Creating container: ${containerName} on port ${assignedPort}`);
@@ -211,9 +209,43 @@ function getPortFromContainer(containerInfo: any): number {
   throw new Error("Could not determine container port");
 }
 
+export async function deleteAllProjectContainers(): Promise<void> {
+  const containers = await docker.listContainers({ all: true });
+  const projectContainers = containers.filter((c) =>
+    c.Names?.some((name) => name.replace(/^\//, "").startsWith("delcu-"))
+  );
+
+  await Promise.all(
+    projectContainers.map(async (c) => {
+      try {
+        const container = docker.getContainer(c.Id);
+        if (c.State === "running") {
+          await container.stop();
+        }
+        await container.remove({ force: true });
+
+        const portLabel = c.Labels?.assignedPort;
+        if (portLabel) releasePort(parseInt(portLabel));
+
+        const imageName = c.Image;
+        if (imageName?.includes("delcu-")) {
+          try {
+            await docker.getImage(imageName).remove({ force: true });
+            console.log(`Deleted image: ${imageName}`);
+          } catch {}
+        }
+
+        console.log(`Deleted old container: ${c.Id}`);
+      } catch (err) {
+        console.warn(`Could not delete container ${c.Id}:`, err);
+      }
+    })
+  );
+}
+
 export async function cleanupImage(containerId: string): Promise<void> {
   try {
-    const imageName = `dec-nextjs-${containerId}`;
+    const imageName = `delcu-${containerId}`;
     const image = docker.getImage(imageName);
     await image.remove({ force: true });
     console.log(`Cleaned up failed image: ${imageName}`);
@@ -229,10 +261,8 @@ export { docker };
 export async function listProjectContainers(): Promise<any[]> {
   const containers = await docker.listContainers({ all: true });
 
-  const projectContainers = containers.filter(
-    (container) =>
-      container.Labels?.project === "december" ||
-      container.Names?.some((name) => name.includes("dec-nextjs-"))
+  const projectContainers = containers.filter((container) =>
+    container.Names?.some((name) => name.replace(/^\//, "").startsWith("delcu-"))
   );
 
   return projectContainers.map((container) => {
@@ -296,7 +326,7 @@ export async function deleteContainer(containerId: string): Promise<void> {
     console.log(`Deleted container: ${containerId}, freed port: ${port}`);
 
     const imageName = containerInfo.Config.Image;
-    if (imageName && imageName.includes("dec-nextjs-")) {
+    if (imageName && imageName.includes("delcu-")) {
       try {
         const image = docker.getImage(imageName);
         await image.remove({ force: true });

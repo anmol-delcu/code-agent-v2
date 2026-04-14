@@ -27,6 +27,9 @@ router.post("/create", async (req, res) => {
   const containerId = uuidv4();
 
   try {
+    console.log("Cleaning up old project containers...");
+    await dockerService.deleteAllProjectContainers();
+
     const imageName = await dockerService.buildImage(containerId);
     const { container, port } = await dockerService.createContainer(
       imageName,
