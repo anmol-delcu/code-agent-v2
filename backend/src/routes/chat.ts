@@ -48,7 +48,7 @@ router.post("/:containerId/messages", async (req, res) => {
       });
     }
   } catch (error) {
-    console.log(error);
+    console.error("[chat] LLM error:", error instanceof Error ? error.message : error);
     if (stream) {
       res.write(
         `data: ${JSON.stringify({

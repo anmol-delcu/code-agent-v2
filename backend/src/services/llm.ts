@@ -4,9 +4,14 @@ import prompt from "../utils/prompt.txt";
 import * as dockerService from "./docker";
 import * as fileService from "./file";
 
+const isAnthropic = config.aiSdk.baseUrl?.includes("anthropic.com");
+
 const openai = new OpenAI({
   apiKey: config.aiSdk.apiKey,
   baseURL: config.aiSdk.baseUrl || "https://api.openai.com/v1",
+  defaultHeaders: isAnthropic
+    ? { "anthropic-version": "2023-06-01" }
+    : undefined,
 });
 
 export interface Message {
