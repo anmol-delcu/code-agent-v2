@@ -30,7 +30,7 @@ export const ProjectsPage = () => {
               Your Projects
             </h2>
             <p className="text-gray-400">
-              Manage and access your December projects.
+              Manage and access your Delcu Code Agent projects.
             </p>
           </div>
         </div>

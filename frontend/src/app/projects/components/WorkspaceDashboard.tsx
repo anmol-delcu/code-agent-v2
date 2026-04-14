@@ -536,7 +536,7 @@ export const WorkspaceDashboard = ({
                 className="text-lg bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent"
                 style={{ fontFamily: "XSpace, monospace" }}
               >
-                DECEMBER
+                Delcu Code Agent
               </span>
             </Link>
 
