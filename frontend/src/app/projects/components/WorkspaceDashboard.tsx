@@ -68,7 +68,7 @@ export const WorkspaceDashboard = ({
     if (containerId) {
       const fetchContainerUrl = async () => {
         try {
-          const response = await fetch(`http://localhost:4000/containers`);
+          const response = await fetch(`/api/containers`);
           const data = await response.json();
           if (data.success) {
             const container = data.containers.find(
@@ -381,7 +381,7 @@ export const WorkspaceDashboard = ({
 
     try {
       const response = await fetch(
-        `http://localhost:4000/containers/${containerId}/export`
+        `/api/containers/${containerId}/export`
       );
 
       if (!response.ok) {

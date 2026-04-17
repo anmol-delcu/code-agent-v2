@@ -44,7 +44,7 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({ containerId }) => {
       try {
         setIsLoading(true);
         const response = await fetch(
-          `http://localhost:4000/containers/${containerId}/file-tree`
+          `/api/containers/${containerId}/file-tree`
         );
 
         if (!response.ok) {
@@ -188,7 +188,7 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({ containerId }) => {
   const loadFileContent = async (file: File) => {
     try {
       const response = await fetch(
-        `http://localhost:4000/containers/${containerId}/file?path=${encodeURIComponent(
+        `/api/containers/${containerId}/file?path=${encodeURIComponent(
           file.path || file.id
         )}`
       );
@@ -257,7 +257,7 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({ containerId }) => {
 
     try {
       const response = await fetch(
-        `http://localhost:4000/containers/${containerId}/files`,
+        `/api/containers/${containerId}/files`,
         {
           method: "PUT",
           headers: {
