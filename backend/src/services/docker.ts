@@ -303,7 +303,7 @@ export async function listProjectContainers(): Promise<any[]> {
       image: container.Image,
       created: new Date(container.Created * 1000).toISOString(),
       assignedPort,
-      url: assignedPort ? `http://localhost:${assignedPort}` : null,
+      url: assignedPort ? `http://${process.env.PUBLIC_HOST || "localhost"}:${assignedPort}` : null,
       ports:
         container.Ports?.map((port) => ({
           private: port.PrivatePort,
