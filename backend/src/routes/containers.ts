@@ -27,8 +27,8 @@ router.post("/create", async (req, res) => {
   const containerId = uuidv4();
 
   try {
-    console.log("Cleaning up old project containers...");
-    await dockerService.deleteAllProjectContainers();
+    console.log("Stopping other running containers...");
+    await dockerService.stopAllRunningProjectContainers();
 
     const imageName = await dockerService.buildImage(containerId);
     const { container, port } = await dockerService.createContainer(
@@ -63,6 +63,9 @@ router.post("/:containerId/start", async (req, res) => {
   const { containerId } = req.params;
 
   try {
+    console.log(`Stopping other containers before starting: ${containerId}`);
+    await dockerService.stopAllRunningProjectContainers(containerId);
+
     const { port } = await dockerService.startContainer(containerId);
 
     res.json({

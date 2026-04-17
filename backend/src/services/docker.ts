@@ -209,6 +209,31 @@ function getPortFromContainer(containerInfo: any): number {
   throw new Error("Could not determine container port");
 }
 
+export async function stopAllRunningProjectContainers(
+  exceptContainerId?: string
+): Promise<void> {
+  const containers = await docker.listContainers({ all: false }); // running only
+  const projectContainers = containers.filter(
+    (c) =>
+      c.Names?.some((name) => name.replace(/^\//, "").startsWith("delcu-")) &&
+      c.Id !== exceptContainerId
+  );
+
+  await Promise.all(
+    projectContainers.map(async (c) => {
+      try {
+        const container = docker.getContainer(c.Id);
+        await container.stop();
+        const portLabel = c.Labels?.assignedPort;
+        if (portLabel) releasePort(parseInt(portLabel));
+        console.log(`Stopped container: ${c.Id}`);
+      } catch (err) {
+        console.warn(`Could not stop container ${c.Id}:`, err);
+      }
+    })
+  );
+}
+
 export async function deleteAllProjectContainers(): Promise<void> {
   const containers = await docker.listContainers({ all: true });
   const projectContainers = containers.filter((c) =>
