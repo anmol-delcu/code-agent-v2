@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Container, getContainers } from "../../../lib/backend/api";
+import { useEffect, useRef, useState } from "react";
+import { getContainers } from "../../../lib/backend/api";
+import { fetchWithAuth } from "../../../lib/fetchWithAuth";
+import type { Container } from "../../../lib/backend/api";
 
 interface LivePreviewProps {
   containerId: string;
@@ -13,28 +15,33 @@ export const LivePreview = ({
   isDesktopView = true,
 }: LivePreviewProps) => {
   const [container, setContainer] = useState<Container | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [isLoadingContainer, setIsLoadingContainer] = useState(true);
+  const [isReady, setIsReady] = useState(false);
+  const [dots, setDots] = useState("");
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const dotsRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Animate dots
+  useEffect(() => {
+    dotsRef.current = setInterval(() => {
+      setDots((d) => (d.length >= 3 ? "" : d + "."));
+    }, 500);
+    return () => {
+      if (dotsRef.current) clearInterval(dotsRef.current);
+    };
+  }, []);
+
+  // Fetch container info
   useEffect(() => {
     const fetchContainer = async () => {
       try {
-        setError(null);
         const containers = await getContainers();
-        const foundContainer = containers.find((c) => c.id === containerId);
-
-        if (!foundContainer) {
-          setError("Container not found");
-          return;
-        }
-
-        setContainer(foundContainer);
-      } catch (err) {
-        setError(
-          err instanceof Error ? err.message : "Failed to fetch container"
-        );
+        const found = containers.find((c) => c.id === containerId);
+        setContainer(found ?? null);
+      } catch {
+        setContainer(null);
       } finally {
-        setIsLoading(false);
+        setIsLoadingContainer(false);
       }
     };
 
@@ -43,129 +50,148 @@ export const LivePreview = ({
     return () => clearInterval(interval);
   }, [containerId]);
 
-  if (isLoading) {
+  // Poll /ready once container is running
+  useEffect(() => {
+    if (!container || container.status !== "running" || !container.url) {
+      setIsReady(false);
+      return;
+    }
+
+    if (isReady) return;
+
+    const checkReady = async () => {
+      try {
+        const res = await fetchWithAuth(`/api/containers/${containerId}/ready`);
+        const data = await res.json();
+        if (data.ready) {
+          setIsReady(true);
+          if (pollRef.current) clearInterval(pollRef.current);
+        }
+      } catch {}
+    };
+
+    checkReady();
+    pollRef.current = setInterval(checkReady, 3000);
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
+  }, [container, containerId, isReady]);
+
+  // Loading container info
+  if (isLoadingContainer) {
     return (
-      <div className="w-full h-full bg-gray-800/60 backdrop-blur-sm rounded-lg border border-gray-700/40 flex items-center justify-center relative">
-        <div className="absolute inset-0 bg-gradient-to-br from-gray-700/10 via-transparent to-gray-600/10 rounded-lg" />
-        <div className="flex flex-col items-center gap-4 relative z-10">
-          <div className="w-8 h-8 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
-          <span className="text-white/70 font-medium">Loading preview...</span>
+      <PreviewShell>
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-8 h-8 border-2 border-blue-400/60 border-t-blue-400 rounded-full animate-spin" />
+          <span className="text-white/50 text-sm">Loading preview{dots}</span>
         </div>
-      </div>
+      </PreviewShell>
     );
   }
 
-  if (error) {
+  // Container not found or not running
+  if (!container || container.status !== "running" || !container.url) {
     return (
-      <div className="w-full h-full bg-gray-800/60 backdrop-blur-sm rounded-lg border border-gray-700/40 flex items-center justify-center relative">
-        <div className="absolute inset-0 bg-gradient-to-br from-gray-700/10 via-transparent to-gray-600/10 rounded-lg" />
-        <div className="text-center relative z-10">
-          <div className="text-red-400 text-lg font-semibold mb-2">
-            Preview Error
-          </div>
-          <div className="text-white/60">{error}</div>
-        </div>
-      </div>
-    );
-  }
-
-  if (!container) {
-    return (
-      <div className="w-full h-full bg-gray-800/60 backdrop-blur-sm rounded-lg border border-gray-700/40 flex items-center justify-center relative">
-        <div className="absolute inset-0 bg-gradient-to-br from-gray-700/10 via-transparent to-gray-600/10 rounded-lg" />
-        <div className="text-center relative z-10">
-          <div className="text-white/60 text-lg">Container not found</div>
-        </div>
-      </div>
-    );
-  }
-
-  if (container.status !== "running" || !container.url) {
-    return (
-      <div className="w-full h-full bg-gray-800/60 backdrop-blur-sm rounded-lg border border-gray-700/40 flex items-center justify-center relative">
-        <div className="absolute inset-0 bg-gradient-to-br from-gray-700/10 via-transparent to-gray-600/10 rounded-lg" />
-        <div className="text-center max-w-md relative z-10">
-          <div className="w-16 h-16 bg-gray-700/60 backdrop-blur-sm rounded-full mx-auto mb-6 flex items-center justify-center border border-gray-600/40 shadow-sm">
-            <svg
-              className="w-8 h-8 text-white/50"
-              fill="currentColor"
-              viewBox="0 0 20 20"
-            >
-              <path
-                fillRule="evenodd"
-                d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
-                clipRule="evenodd"
-              />
+      <PreviewShell>
+        <div className="text-center space-y-3">
+          <div className="w-12 h-12 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center mx-auto">
+            <svg className="w-6 h-6 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.347a1.125 1.125 0 0 1 0 1.972l-11.54 6.347a1.125 1.125 0 0 1-1.667-.986V5.653Z" />
             </svg>
           </div>
-          <h1 className="text-2xl font-bold text-white mb-4">
-            Container Not Running
-          </h1>
-          <p className="text-white/60 mb-6">
-            Start the container to see the live preview
-          </p>
-          <div className="text-sm text-white/40 bg-gray-700/40 backdrop-blur-sm px-3 py-2 rounded-lg border border-gray-600/40">
-            Status: <span className="font-mono">{container.status}</span>
+          <p className="text-zinc-400 text-sm">Container not running</p>
+        </div>
+      </PreviewShell>
+    );
+  }
+
+  // Container running but app not ready yet
+  if (!isReady) {
+    return (
+      <PreviewShell>
+        <div className="text-center space-y-6 max-w-xs">
+          {/* Brewing animation */}
+          <div className="relative w-16 h-16 mx-auto">
+            <div className="absolute inset-0 rounded-full border-2 border-violet-500/20 animate-ping" />
+            <div className="absolute inset-2 rounded-full border-2 border-violet-500/40 animate-ping [animation-delay:0.3s]" />
+            <div className="relative w-16 h-16 rounded-full bg-zinc-900 border border-zinc-700 flex items-center justify-center">
+              <svg className="w-7 h-7 text-violet-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17.25 6.75 22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3-4.5 16.5" />
+              </svg>
+            </div>
+          </div>
+
+          <div>
+            <p className="text-white/80 text-sm font-medium">Brewing your app{dots}</p>
+            <p className="text-zinc-500 text-xs mt-1">Starting Next.js dev server</p>
+          </div>
+
+          {/* Progress bar */}
+          <div className="w-48 mx-auto h-1 bg-zinc-800 rounded-full overflow-hidden">
+            <div className="h-full bg-gradient-to-r from-violet-500 to-blue-500 rounded-full animate-[loading_2s_ease-in-out_infinite]" style={{ width: "60%" }} />
+          </div>
+
+          <p className="text-zinc-600 text-xs">First load takes ~30 seconds</p>
+        </div>
+      </PreviewShell>
+    );
+  }
+
+  // App is ready — show iframe
+  const iframe = (
+    <iframe
+      key={container.url}
+      src={container.url}
+      className="w-full h-full border-0"
+      title={`Preview of ${container.name || container.id}`}
+      sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox"
+    />
+  );
+
+  if (!isDesktopView) {
+    return (
+      <div className="w-full h-full bg-zinc-900/20 flex items-center justify-center p-6">
+        <div
+          className="bg-gray-800 rounded-[2.5rem] p-3 shadow-2xl border border-gray-700/50 relative"
+          style={{ width: "320px", height: "680px", maxHeight: "calc(100vh - 140px)" }}
+        >
+          <div className="absolute inset-0 bg-gradient-to-br from-gray-600/10 via-transparent to-gray-700/10 rounded-[2.5rem]" />
+          <div className="w-full h-full rounded-[1.8rem] overflow-hidden relative z-10">
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-28 h-5 bg-gray-800 rounded-b-2xl z-10" />
+            {iframe}
           </div>
         </div>
       </div>
     );
-  }
-
-  const previewContainer = (
-    <div className="w-full h-full bg-white rounded-lg border border-zinc-300/20 overflow-hidden shadow-2xl relative">
-      <div className="absolute inset-0 bg-gradient-to-br from-white/5 via-transparent to-white/2" />
-      <div className="bg-zinc-100/20 backdrop-blur-sm border-b border-zinc-300/20 px-4 py-3 flex items-center justify-between relative z-10">
-        <div className="flex items-center gap-2">
-          <div className="w-3 h-3 bg-red-500 rounded-full shadow-sm"></div>
-          <div className="w-3 h-3 bg-yellow-500 rounded-full shadow-sm"></div>
-          <div className="w-3 h-3 bg-green-500 rounded-full shadow-sm"></div>
-        </div>
-        <div className="text-sm text-zinc-600 font-mono bg-white/80 backdrop-blur-sm px-3 py-1 rounded border border-zinc-300/30 shadow-sm">
-          {container.url}
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse shadow-sm"></div>
-          <span className="text-xs text-zinc-600 font-medium">Live</span>
-        </div>
-      </div>
-      <iframe
-        src={container.url}
-        className="w-full h-full border-0 relative z-10"
-        title={`Preview of ${container.name || container.id}`}
-        sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox"
-      />
-    </div>
-  );
-
-  if (isDesktopView) {
-    return previewContainer;
   }
 
   return (
-    <div className="w-full h-full bg-zinc-900/20 flex items-center justify-center p-6">
-      <div
-        className="bg-gray-800 rounded-[2.5rem] p-3 shadow-2xl border border-gray-700/50 relative"
-        style={{
-          width: "320px",
-          height: "680px",
-          maxHeight: "calc(100vh - 140px)",
-        }}
-      >
-        <div className="absolute inset-0 bg-gradient-to-br from-gray-600/10 via-transparent to-gray-700/10 rounded-[2.5rem]" />
-        <div className="w-full h-full bg-transparent rounded-[1.8rem] overflow-hidden relative z-10">
-          <div className="absolute top-0 left-1/2 transform -translate-x-1/2 w-28 h-5 bg-gray-800 rounded-b-2xl z-10"></div>
-
-          <div className="w-full h-full">
-            <iframe
-              src={container.url}
-              className="w-full h-full border-0 rounded-[1.8rem]"
-              title={`Mobile Preview of ${container.name || container.id}`}
-              sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox"
-            />
-          </div>
+    <div className="w-full h-full bg-white rounded-lg border border-zinc-300/20 overflow-hidden shadow-2xl">
+      <div className="bg-zinc-100/20 backdrop-blur-sm border-b border-zinc-300/20 px-4 py-3 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div className="w-3 h-3 bg-red-500 rounded-full" />
+          <div className="w-3 h-3 bg-yellow-500 rounded-full" />
+          <div className="w-3 h-3 bg-green-500 rounded-full" />
         </div>
+        <div className="text-sm text-zinc-600 font-mono bg-white/80 px-3 py-1 rounded border border-zinc-300/30">
+          {container.url}
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+          <span className="text-xs text-zinc-600 font-medium">Live</span>
+        </div>
+      </div>
+      <div className="w-full" style={{ height: "calc(100% - 49px)" }}>
+        {iframe}
       </div>
     </div>
   );
 };
+
+function PreviewShell({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="w-full h-full bg-zinc-950 rounded-lg border border-zinc-800 flex items-center justify-center">
+      {children}
+    </div>
+  );
+}

@@ -339,4 +339,23 @@ router.get("/:containerId/export", async (req, res) => {
   }
 });
 
+router.get("/:containerId/ready", async (req: AuthRequest, res) => {
+  const { containerId } = req.params;
+  try {
+    const containers = await dockerService.listProjectContainers(req.userId!);
+    const container = containers.find((c) => c.id === containerId);
+
+    if (!container || !container.url || container.status !== "running") {
+      return res.json({ ready: false });
+    }
+
+    const response = await fetch(container.url, {
+      signal: AbortSignal.timeout(3000),
+    });
+    res.json({ ready: response.status < 500 });
+  } catch {
+    res.json({ ready: false });
+  }
+});
+
 export default router;
