@@ -1,12 +1,14 @@
 # Deploying on DigitalOcean
 
-This guide covers deploying the full stack (frontend + backend + Docker) on a single DigitalOcean Droplet.
+This guide covers deploying the full stack (frontend + backend + Docker) on a single DigitalOcean Droplet (or any Ubuntu 22.04 VM).
+
+---
 
 ## Prerequisites
 
-- A DigitalOcean account
-- A domain name (optional, but recommended for SSL)
-- SSH access to your Droplet
+- A DigitalOcean account (or any Linux VPS)
+- SSH access to the server
+- A domain name (optional, but required for SSL)
 
 ---
 
@@ -20,13 +22,11 @@ This guide covers deploying the full stack (frontend + backend + Docker) on a si
    - **Authentication**: SSH Key or Password
 3. Click **Create Droplet** and note the IP address
 
-> **Note**: If you add a DigitalOcean Cloud Firewall to your Droplet, make sure to allow inbound rules for:
-> - HTTP (TCP port 80)
-> - HTTPS (TCP port 443)
-> - SSH (TCP port 22)
-> - Custom TCP ports **8000–9000** (for Docker container previews)
->
-> By default a new firewall blocks everything — missing port 80 will make the site unreachable.
+> **Firewall rules**: If you add a DigitalOcean Cloud Firewall, allow inbound:
+> - HTTP (TCP 80)
+> - HTTPS (TCP 443)
+> - SSH (TCP 22)
+> - Custom TCP **8000–9000** (Docker container preview ports)
 
 ---
 
@@ -35,8 +35,6 @@ This guide covers deploying the full stack (frontend + backend + Docker) on a si
 ```bash
 ssh root@YOUR_DROPLET_IP
 ```
-
-If you get `Permission denied (publickey)`, use the **Console** button in the DigitalOcean dashboard to get browser-based access.
 
 ---
 
@@ -62,7 +60,7 @@ apt install -y npm
 npm install -g pm2
 ```
 
-> **Note**: `lsof` is required by the backend for Docker port management. Install it explicitly.
+> `lsof` is required by the backend for Docker port management.
 
 ---
 
@@ -83,18 +81,24 @@ cp .env.example .env
 nano .env
 ```
 
-Fill in your values:
+Fill in all values:
 
 ```
 AI_BASE_URL=https://api.anthropic.com/v1
 AI_API_KEY=your-anthropic-api-key
 AI_MODEL=claude-sonnet-4-20250514
 
-# Public IP or domain of this server (used for Docker container preview URLs)
+# Public IP or domain of this server
 PUBLIC_HOST=YOUR_DROPLET_IP
+
+# Long random string for JWT signing
+JWT_SECRET=your-super-secret-jwt-key
 ```
 
-Replace `YOUR_DROPLET_IP` with your actual Droplet IP (e.g. `68.183.82.217`), or your domain name if you have one.
+Generate a strong JWT secret:
+```bash
+openssl rand -hex 32
+```
 
 ---
 
@@ -103,12 +107,12 @@ Replace `YOUR_DROPLET_IP` with your actual Droplet IP (e.g. `68.183.82.217`), or
 ```bash
 # Backend
 cd /opt/app/backend
-bun install
+/root/.bun/bin/bun install
 
 # Frontend (production build)
 cd /opt/app/frontend
-bun install
-bun run build
+/root/.bun/bin/bun install
+/root/.bun/bin/bun run build
 ```
 
 ---
@@ -119,7 +123,7 @@ bun run build
 nano /etc/nginx/sites-available/app
 ```
 
-Paste the following (replace `yourdomain.com` with your actual domain, or remove the `server_name` line if using raw IP):
+Paste the following (replace `yourdomain.com` with your domain, or remove `server_name` if using a raw IP):
 
 ```nginx
 server {
@@ -172,39 +176,34 @@ Skip this step if using a raw IP address.
 ## Step 9: Start with PM2
 
 ```bash
-# Find bun path
-which bun   # e.g. /root/.bun/bin/bun
-
-# Start backend — cwd MUST be /opt/app/backend so Dockerfile path resolves correctly
+# Backend — cwd MUST be /opt/app/backend so Dockerfile path resolves correctly
 pm2 start "/root/.bun/bin/bun --env-file /opt/app/.env src/index.ts" \
   --name backend \
   --cwd /opt/app/backend
 
-# Start frontend
+# Frontend
 pm2 start "/root/.bun/bin/bun run start" \
   --name frontend \
   --cwd /opt/app/frontend
 
-# Save and enable auto-start on reboot
+# Save process list and enable auto-start on reboot
 pm2 save
 pm2 startup   # run the command it outputs
 ```
-
-> **Critical**: The backend's `--cwd` must be `/opt/app/backend`, not `/opt/app`. The backend reads `./src/Dockerfile` relative to its working directory — using the wrong CWD causes `ENOENT: no such file or directory` errors when creating projects.
 
 ---
 
 ## Step 10: Verify
 
 ```bash
-pm2 status                             # both should show 'online'
-curl http://localhost:4000/containers  # should return {"success":true,"containers":[]}
-curl http://localhost:3000             # frontend health check
+pm2 status                              # both should show 'online'
+curl http://localhost:4000/auth/me      # should return 401 (auth required)
+curl http://localhost:3000              # frontend health check
 ```
 
-Open `http://YOUR_DROPLET_IP` or `https://yourdomain.com` in your browser.
+Open `http://YOUR_DROPLET_IP` in your browser, create an account at `/signup`, and start building.
 
-To verify the full flow, create a project — the first build takes **3–5 minutes** as it pulls the Node.js base image. Watch progress with:
+The first Docker build takes **3–5 minutes** as it pulls the base image. Watch progress with:
 
 ```bash
 pm2 logs backend --lines 0
@@ -214,40 +213,57 @@ pm2 logs backend --lines 0
 
 ## Updating the app
 
-When you push new changes to GitHub, pull and rebuild on the server:
-
 ```bash
 cd /opt/app
 git fetch origin
-git reset --hard origin/main   # use reset instead of pull to avoid merge conflicts
+git reset --hard origin/main   # use reset to avoid merge conflicts
 
 # If backend changed:
-cd /opt/app/backend && bun install
+cd /opt/app/backend && /root/.bun/bin/bun install
 pm2 restart backend
 
 # If frontend changed:
 cd /opt/app/frontend
-bun install
-rm -rf .next   # clean build to avoid stale cached files
-bun run build
+/root/.bun/bin/bun install
+rm -rf .next   # always clean before rebuild
+/root/.bun/bin/bun run build
 pm2 restart frontend
 ```
 
-> **Note**: Always use `rm -rf .next` before rebuilding the frontend to ensure stale cached files don't end up in the new build.
+---
+
+## After a server reboot
+
+```bash
+export PATH="$HOME/.bun/bin:$PATH"
+systemctl start docker
+pm2 resurrect
+pm2 status
+```
+
+To avoid this after every reboot, ensure `pm2 startup` was run during initial setup.
 
 ---
 
-## Useful PM2 commands
+## Useful commands
 
 ```bash
-pm2 status               # check running processes
-pm2 logs                 # view all logs
-pm2 logs backend         # backend logs only
-pm2 logs frontend        # frontend logs only
-pm2 logs backend --lines 0   # tail live logs
-pm2 restart all          # restart everything
-pm2 stop all             # stop everything
-pm2 delete backend       # remove a process (to re-add with different config)
+pm2 status                        # check running processes
+pm2 logs                          # view all logs
+pm2 logs backend --lines 0        # tail live backend logs
+pm2 restart all                   # restart everything
+pm2 stop all                      # stop everything
+
+# Stop all user project containers (free up RAM)
+docker ps --filter "label=project=december" -q | xargs -r docker stop
+
+# Stop and remove all project containers + images (free up disk)
+docker ps -a --filter "label=project=december" -q | xargs -r docker rm -f
+docker images --filter "label=project=december" -q | xargs -r docker rmi -f
+
+# Check disk / memory usage
+docker system df
+free -h
 ```
 
 ---
@@ -256,12 +272,17 @@ pm2 delete backend       # remove a process (to re-add with different config)
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| Site unreachable after adding firewall | Port 80 blocked | Add HTTP inbound rule in DO firewall |
-| `Docker likely not running` error | Frontend hitting wrong URL | Rebuild frontend with `rm -rf .next && bun run build` |
-| `ENOENT: no such file or directory, open './src/Dockerfile'` | Backend started from wrong CWD | Use `--cwd /opt/app/backend` in PM2 start |
-| Project creation stuck at "Cleaning up..." | Docker daemon not running | `systemctl start docker && pm2 restart backend` |
-| `git pull` fails with divergent branches | History diverged | Use `git fetch origin && git reset --hard origin/main` |
-| Container preview not loading | Port 8000-9000 blocked | Add custom TCP 8000-9000 inbound rule in DO firewall |
+| 502 Bad Gateway | Frontend or backend process is down | `pm2 status` then `pm2 restart all` |
+| `bun: command not found` | bun not in PATH | Use full path `/root/.bun/bin/bun` or run `source ~/.bashrc` |
+| Build fails with `SiCss` error | Wrong react-icons version | `cd frontend && /root/.bun/bin/bun install && rm -rf .next && /root/.bun/bin/bun run build` |
+| `Cannot find module '../../config'` | `backend/config.ts` missing | `git reset --hard origin/main` then restart backend |
+| `ENOENT: no such file or directory, open './src/Dockerfile'` | Backend started from wrong CWD | Use `--cwd /opt/app/backend` in PM2 start command |
+| `401 Invalid Anthropic API Key` | `.env` not loaded by PM2 | Use `--env-file /opt/app/.env` in PM2 start command |
+| `Docker likely not running` on frontend | Docker daemon stopped | `systemctl start docker && pm2 restart backend` |
+| Container preview not loading | Ports 8000-9000 blocked | Add custom TCP 8000-9000 inbound rule in firewall |
+| Site unreachable after adding firewall | Port 80 blocked | Add HTTP inbound rule in DigitalOcean firewall |
+| `git pull` fails with divergent branches | History diverged | `git fetch origin && git reset --hard origin/main` |
+| JSON parse error on signup/login | Backend not running | `curl http://localhost:4000/auth/me` to diagnose |
 
 ---
 
@@ -271,8 +292,17 @@ pm2 delete backend       # remove a process (to re-add with different config)
 Browser
   └── Nginx (:80 / :443)
         ├── /api/*  → Express backend (:4000)  [cwd: /opt/app/backend]
+        │              ├── /auth/*     – signup, login, JWT
+        │              ├── /containers/* – Docker management (auth required)
+        │              ├── /chat/*     – AI chat (auth required)
         │              └── Docker daemon → project containers (:8000–:9000)
         └── /*      → Next.js frontend (:3000)  [cwd: /opt/app/frontend]
 ```
 
-Chat sessions are persisted in `backend/data/sessions.db` (SQLite). This file survives restarts but will be lost if the Droplet is destroyed — back it up periodically if needed.
+**Database**: `backend/data/app.db` (SQLite, three tables: `users`, `projects`, `sessions`).
+Back this file up periodically — it is the only stateful data on the server.
+
+```bash
+# Quick backup
+cp /opt/app/backend/data/app.db /root/app-backup-$(date +%Y%m%d).db
+```
