@@ -7,6 +7,7 @@ import * as packageService from "../services/package";
 import { requireAuth } from "../middleware/auth";
 import type { AuthRequest } from "../middleware/auth";
 import { db } from "../db";
+import { getUserById } from "../services/auth";
 
 const router = express.Router();
 
@@ -32,11 +33,15 @@ router.post("/create", async (req: AuthRequest, res) => {
     console.log("Stopping other running containers...");
     await dockerService.stopAllRunningProjectContainers(userId);
 
+    const user = getUserById(userId);
+    const firstName = user?.name?.split(" ")[0] || "user";
+
     const imageName = await dockerService.buildImage(containerId);
     const { container, port } = await dockerService.createContainer(
       imageName,
       containerId,
-      userId
+      userId,
+      firstName
     );
 
     db.run(

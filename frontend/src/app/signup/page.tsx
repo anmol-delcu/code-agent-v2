@@ -18,6 +18,11 @@ export default function SignupPage() {
     e.preventDefault();
     setError("");
     setIsLoading(true);
+    if (!name.trim()) {
+      setError("Name is required");
+      setIsLoading(false);
+      return;
+    }
     try {
       await signup(email, password, name || undefined);
       router.push("/");
@@ -41,13 +46,14 @@ export default function SignupPage() {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-xs text-zinc-400 mb-1.5">
-              Name <span className="text-zinc-600">(optional)</span>
+              Name
             </label>
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Your name"
+              required
               className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3.5 py-2.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-600 transition-colors"
             />
           </div>

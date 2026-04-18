@@ -124,9 +124,13 @@ export async function buildImage(containerId: string): Promise<string> {
 export async function createContainer(
   imageName: string,
   containerId: string,
-  userId: string
+  userId: string,
+  userFirstName?: string
 ): Promise<{ container: Docker.Container; port: number }> {
-  const containerName = `delcu-${containerId}`;
+  const safeName = userFirstName
+    ? userFirstName.toLowerCase().replace(/[^a-z0-9]/g, "")
+    : "user";
+  const containerName = `delcu-${safeName}-${containerId.slice(0, 8)}`;
   const assignedPort = await findAvailablePort();
 
   console.log(`Creating container: ${containerName} on port ${assignedPort}`);

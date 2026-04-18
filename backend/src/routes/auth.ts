@@ -15,6 +15,12 @@ router.post("/signup", async (req, res) => {
       .json({ success: false, error: "Email and password are required" });
   }
 
+  if (!name || !name.trim()) {
+    return res
+      .status(400)
+      .json({ success: false, error: "Name is required" });
+  }
+
   if (password.length < 8) {
     return res
       .status(400)
