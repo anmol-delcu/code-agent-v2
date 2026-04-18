@@ -345,12 +345,14 @@ router.get("/:containerId/ready", async (req: AuthRequest, res) => {
     const containers = await dockerService.listProjectContainers(req.userId!);
     const container = containers.find((c) => c.id === containerId);
 
-    if (!container || !container.url || container.status !== "running") {
+    if (!container || !container.assignedPort || container.status !== "running") {
       return res.json({ ready: false });
     }
 
-    const response = await fetch(container.url, {
-      signal: AbortSignal.timeout(3000),
+    // Use localhost to avoid firewall issues with the public IP
+    const localUrl = `http://localhost:${container.assignedPort}`;
+    const response = await fetch(localUrl, {
+      signal: AbortSignal.timeout(4000),
     });
     res.json({ ready: response.status < 500 });
   } catch {
