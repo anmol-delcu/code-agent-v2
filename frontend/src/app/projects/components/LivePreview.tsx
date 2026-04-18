@@ -8,18 +8,22 @@ import type { Container } from "../../../lib/backend/api";
 interface LivePreviewProps {
   containerId: string;
   isDesktopView?: boolean;
+  refreshTrigger?: number;
 }
 
 export const LivePreview = ({
   containerId,
   isDesktopView = true,
+  refreshTrigger = 0,
 }: LivePreviewProps) => {
   const [container, setContainer] = useState<Container | null>(null);
   const [isLoadingContainer, setIsLoadingContainer] = useState(true);
   const [isReady, setIsReady] = useState(false);
+  const [iframeKey, setIframeKey] = useState(0);
   const [dots, setDots] = useState("");
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const dotsRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const prevTriggerRef = useRef(refreshTrigger);
 
   // Animate dots
   useEffect(() => {
@@ -30,6 +34,20 @@ export const LivePreview = ({
       if (dotsRef.current) clearInterval(dotsRef.current);
     };
   }, []);
+
+  // Reload iframe when AI finishes writing code
+  useEffect(() => {
+    if (refreshTrigger !== prevTriggerRef.current) {
+      prevTriggerRef.current = refreshTrigger;
+      if (isReady) {
+        // Small delay so the file write completes before reload
+        setTimeout(() => setIframeKey((k) => k + 1), 1500);
+      } else {
+        // App wasn't ready yet — re-check readiness
+        setIsReady(false);
+      }
+    }
+  }, [refreshTrigger, isReady]);
 
   // Fetch container info
   useEffect(() => {
@@ -140,7 +158,7 @@ export const LivePreview = ({
   // App is ready — show iframe
   const iframe = (
     <iframe
-      key={container.url}
+      key={`${container.url}-${iframeKey}`}
       src={container.url}
       className="w-full h-full border-0"
       title={`Preview of ${container.name || container.id}`}

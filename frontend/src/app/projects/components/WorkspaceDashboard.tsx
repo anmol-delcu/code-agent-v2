@@ -52,6 +52,7 @@ export const WorkspaceDashboard = ({
   );
   const [isDragOver, setIsDragOver] = useState<boolean>(false);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [lastCodeChange, setLastCodeChange] = useState<number>(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const streamCancelRef = useRef<(() => void) | null>(null);
@@ -271,6 +272,7 @@ export const WorkspaceDashboard = ({
           });
         } else if (data.type === "done") {
           setStreamingMessageId(null);
+          setLastCodeChange((n) => n + 1);
         }
       },
       (error) => {
@@ -762,6 +764,7 @@ export const WorkspaceDashboard = ({
                   <LivePreview
                     containerId={containerId}
                     isDesktopView={isDesktopView}
+                    refreshTrigger={lastCodeChange}
                   />
                 </div>
               </div>
