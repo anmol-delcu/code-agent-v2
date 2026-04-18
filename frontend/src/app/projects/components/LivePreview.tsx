@@ -18,7 +18,11 @@ export const LivePreview = ({
 }: LivePreviewProps) => {
   const [container, setContainer] = useState<Container | null>(null);
   const [isLoadingContainer, setIsLoadingContainer] = useState(true);
-  const [isReady, setIsReady] = useState(false);
+  // Restore readiness from session so returning users skip the brewing screen
+  const [isReady, setIsReady] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return sessionStorage.getItem(`preview-ready-${containerId}`) === "1";
+  });
   const [iframeKey, setIframeKey] = useState(0);
   const [dots, setDots] = useState("");
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -72,6 +76,7 @@ export const LivePreview = ({
   useEffect(() => {
     if (!container || container.status !== "running" || !container.url) {
       setIsReady(false);
+      sessionStorage.removeItem(`preview-ready-${containerId}`);
       return;
     }
 
@@ -83,6 +88,7 @@ export const LivePreview = ({
         const data = await res.json();
         if (data.ready) {
           setIsReady(true);
+          sessionStorage.setItem(`preview-ready-${containerId}`, "1");
           if (pollRef.current) clearInterval(pollRef.current);
         }
       } catch {}
