@@ -16,6 +16,7 @@ import {
   Trash2,
 } from "lucide-react";
 import React, { useEffect, useState } from "react";
+import { fetchWithAuth } from "../../../lib/fetchWithAuth";
 
 interface Attachment {
   type: "image" | "document";
@@ -106,7 +107,7 @@ const parseSpecialTags = (
               match[2].trim().length
             } chars)`
           );
-          response = await fetch(
+          response = await fetchWithAuth(
             `/api/containers/${containerId}/files`,
             {
               method: "PUT",
@@ -123,7 +124,7 @@ const parseSpecialTags = (
           break;
         case "rename":
           console.log(`[FILE OP] Renaming file: ${match[1]} → ${match[2]}`);
-          response = await fetch(
+          response = await fetchWithAuth(
             `/api/containers/${containerId}/files/rename`,
             {
               method: "PUT",
@@ -137,7 +138,7 @@ const parseSpecialTags = (
           break;
         case "delete":
           console.log(`[FILE OP] Deleting file: ${match[1]}`);
-          response = await fetch(
+          response = await fetchWithAuth(
             `/api/containers/${containerId}/files`,
             {
               method: "DELETE",
@@ -157,7 +158,7 @@ const parseSpecialTags = (
               version ? `@${version}` : ""
             }`
           );
-          response = await fetch(
+          response = await fetchWithAuth(
             `/api/containers/${containerId}/dependencies`,
             {
               method: "POST",

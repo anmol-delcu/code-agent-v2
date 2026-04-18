@@ -12,6 +12,7 @@ import {
   Smartphone,
 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { fetchWithAuth } from "../../../lib/fetchWithAuth";
 
 interface TopNavigationProps {
   sidebarOpen: boolean;
@@ -38,7 +39,8 @@ export const TopNavigation = ({
     if (containerId) {
       const fetchContainerUrl = async () => {
         try {
-          const response = await fetch(`/api/containers`);
+          const token = localStorage.getItem("auth_token");
+          const response = await fetchWithAuth(`/api/containers`);
           const data = await response.json();
           if (data.success) {
             const container = data.containers.find(

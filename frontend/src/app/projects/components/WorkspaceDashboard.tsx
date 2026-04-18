@@ -25,6 +25,7 @@ import {
   sendChatMessage,
   sendChatMessageStream,
 } from "../../../lib/backend/api";
+import { fetchWithAuth } from "../../../lib/fetchWithAuth";
 import { ChatInput } from "../../create/components/ChatInput";
 import { ChatMessage } from "../../create/components/ChatMessage";
 import CodeEditor from "../../editor/CodeEditor";
@@ -68,7 +69,7 @@ export const WorkspaceDashboard = ({
     if (containerId) {
       const fetchContainerUrl = async () => {
         try {
-          const response = await fetch(`/api/containers`);
+          const response = await fetchWithAuth(`/api/containers`);
           const data = await response.json();
           if (data.success) {
             const container = data.containers.find(
@@ -380,7 +381,7 @@ export const WorkspaceDashboard = ({
     setIsExporting(true);
 
     try {
-      const response = await fetch(
+      const response = await fetchWithAuth(
         `/api/containers/${containerId}/export`
       );
 

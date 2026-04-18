@@ -1,4 +1,5 @@
 import express from "express";
+import authRoutes from "./routes/auth";
 import chatRoutes from "./routes/chat";
 import containerRoutes from "./routes/containers";
 
@@ -22,6 +23,7 @@ app.use((req, res, next) => {
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
+app.use("/auth", authRoutes);
 app.use("/containers", containerRoutes);
 app.use("/chat", chatRoutes);
 

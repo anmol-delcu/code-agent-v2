@@ -4,17 +4,18 @@ import * as dockerService from "../services/docker";
 import * as exportService from "../services/export";
 import * as fileService from "../services/file";
 import * as packageService from "../services/package";
+import { requireAuth } from "../middleware/auth";
+import type { AuthRequest } from "../middleware/auth";
+import { db } from "../db";
 
 const router = express.Router();
 
-router.get("/", async (req, res) => {
-  try {
-    const containers = await dockerService.listProjectContainers();
+router.use(requireAuth);
 
-    res.json({
-      success: true,
-      containers,
-    });
+router.get("/", async (req: AuthRequest, res) => {
+  try {
+    const containers = await dockerService.listProjectContainers(req.userId!);
+    res.json({ success: true, containers });
   } catch (error) {
     res.status(500).json({
       success: false,
@@ -23,17 +24,31 @@ router.get("/", async (req, res) => {
   }
 });
 
-router.post("/create", async (req, res) => {
+router.post("/create", async (req: AuthRequest, res) => {
   const containerId = uuidv4();
+  const userId = req.userId!;
 
   try {
     console.log("Stopping other running containers...");
-    await dockerService.stopAllRunningProjectContainers();
+    await dockerService.stopAllRunningProjectContainers(userId);
 
     const imageName = await dockerService.buildImage(containerId);
     const { container, port } = await dockerService.createContainer(
       imageName,
-      containerId
+      containerId,
+      userId
+    );
+
+    db.run(
+      "INSERT INTO projects (id, userId, containerId, name, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?)",
+      [
+        containerId,
+        userId,
+        container.id,
+        `Project ${new Date().toLocaleDateString()}`,
+        new Date().toISOString(),
+        new Date().toISOString(),
+      ]
     );
 
     res.json({
@@ -43,7 +58,7 @@ router.post("/create", async (req, res) => {
         id: containerId,
         containerId: container.id,
         status: "running",
-        port: port,
+        port,
         url: `http://${process.env.PUBLIC_HOST || "localhost"}:${port}`,
         createdAt: new Date().toISOString(),
         type: "Next.js App",
@@ -51,7 +66,6 @@ router.post("/create", async (req, res) => {
     });
   } catch (error) {
     await dockerService.cleanupImage(containerId);
-
     res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : "Unknown error",
@@ -59,12 +73,13 @@ router.post("/create", async (req, res) => {
   }
 });
 
-router.post("/:containerId/start", async (req, res) => {
+router.post("/:containerId/start", async (req: AuthRequest, res) => {
   const { containerId } = req.params;
+  const userId = req.userId!;
 
   try {
     console.log(`Stopping other containers before starting: ${containerId}`);
-    await dockerService.stopAllRunningProjectContainers(containerId);
+    await dockerService.stopAllRunningProjectContainers(userId, containerId);
 
     const { port } = await dockerService.startContainer(containerId);
 

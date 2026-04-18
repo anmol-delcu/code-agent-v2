@@ -1,12 +1,17 @@
 import express from "express";
 import * as llmService from "../services/llm";
+import { requireAuth } from "../middleware/auth";
+import type { AuthRequest } from "../middleware/auth";
 
 const router = express.Router();
 
-//@ts-ignore
-router.post("/:containerId/messages", async (req, res) => {
+router.use(requireAuth);
+
+// @ts-ignore
+router.post("/:containerId/messages", async (req: AuthRequest, res) => {
   const { containerId } = req.params;
   const { message, attachments = [], stream = false } = req.body;
+  const userId = req.userId!;
 
   if (!message || typeof message !== "string") {
     return res.status(400).json({
@@ -23,6 +28,7 @@ router.post("/:containerId/messages", async (req, res) => {
       res.setHeader("Access-Control-Allow-Origin", "*");
 
       const messageStream = llmService.sendMessageStream(
+        userId,
         containerId,
         message,
         attachments
@@ -36,25 +42,26 @@ router.post("/:containerId/messages", async (req, res) => {
       res.end();
     } else {
       const { userMessage, assistantMessage } = await llmService.sendMessage(
+        userId,
         containerId,
         message,
         attachments
       );
 
-      res.json({
-        success: true,
-        userMessage,
-        assistantMessage,
-      });
+      res.json({ success: true, userMessage, assistantMessage });
     }
   } catch (error) {
-    console.error("[chat] LLM error:", error instanceof Error ? error.message : error);
+    console.error(
+      "[chat] LLM error:",
+      error instanceof Error ? error.message : error
+    );
     if (stream) {
       res.write(
         `data: ${JSON.stringify({
           type: "error",
           data: {
-            error: error instanceof Error ? error.message : "Unknown error",
+            error:
+              error instanceof Error ? error.message : "Unknown error",
           },
         })}\n\n`
       );
@@ -68,11 +75,12 @@ router.post("/:containerId/messages", async (req, res) => {
   }
 });
 
-router.get("/:containerId/messages", async (req, res) => {
+router.get("/:containerId/messages", async (req: AuthRequest, res) => {
   const { containerId } = req.params;
+  const userId = req.userId!;
 
   try {
-    const session = llmService.getOrCreateChatSession(containerId);
+    const session = llmService.getOrCreateChatSession(userId, containerId);
 
     res.json({
       success: true,

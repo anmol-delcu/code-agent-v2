@@ -6,6 +6,7 @@ import { FileTree } from "./components/FileTree";
 import Sidebar from "./components/Sidebar";
 import { Code } from "./utils/Code";
 import { Directory, File, Type } from "./utils/FileManager";
+import { fetchWithAuth } from "../../lib/fetchWithAuth";
 
 interface CodeEditorProps {
   containerId: string;
@@ -43,7 +44,7 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({ containerId }) => {
     const fetchFileTree = async () => {
       try {
         setIsLoading(true);
-        const response = await fetch(
+        const response = await fetchWithAuth(
           `/api/containers/${containerId}/file-tree`
         );
 
@@ -187,7 +188,7 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({ containerId }) => {
 
   const loadFileContent = async (file: File) => {
     try {
-      const response = await fetch(
+      const response = await fetchWithAuth(
         `/api/containers/${containerId}/file?path=${encodeURIComponent(
           file.path || file.id
         )}`
@@ -256,7 +257,7 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({ containerId }) => {
     setIsSaving(true);
 
     try {
-      const response = await fetch(
+      const response = await fetchWithAuth(
         `/api/containers/${containerId}/files`,
         {
           method: "PUT",

@@ -1,6 +1,7 @@
 import OpenAI from "openai";
 import { config } from "../../config";
 import prompt from "../utils/prompt.txt";
+import { db } from "../db";
 import * as dockerService from "./docker";
 import * as fileService from "./file";
 
@@ -32,53 +33,96 @@ export interface Attachment {
 
 export interface ChatSession {
   id: string;
+  userId: string;
   containerId: string;
   messages: Message[];
   createdAt: string;
   updatedAt: string;
 }
 
-const chatSessions = new Map<string, ChatSession>();
+// --- SQLite helpers ---
+
+type SessionRow = {
+  id: string;
+  userId: string;
+  containerId: string;
+  messages: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+function rowToSession(row: SessionRow): ChatSession {
+  return { ...row, messages: JSON.parse(row.messages) };
+}
+
+function dbGet(userId: string, containerId: string): ChatSession | undefined {
+  const row = db
+    .query<SessionRow, [string, string]>(
+      "SELECT * FROM sessions WHERE userId = ? AND containerId = ? ORDER BY createdAt DESC LIMIT 1"
+    )
+    .get(userId, containerId);
+  return row ? rowToSession(row) : undefined;
+}
+
+function dbGetById(sessionId: string): ChatSession | undefined {
+  const row = db
+    .query<SessionRow, string>("SELECT * FROM sessions WHERE id = ?")
+    .get(sessionId);
+  return row ? rowToSession(row) : undefined;
+}
+
+function dbSave(session: ChatSession): void {
+  db.run(
+    "INSERT OR REPLACE INTO sessions (id, userId, containerId, messages, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?)",
+    [
+      session.id,
+      session.userId,
+      session.containerId,
+      JSON.stringify(session.messages),
+      session.createdAt,
+      session.updatedAt,
+    ]
+  );
+}
+
+// --- Public session API ---
 
 export async function createChatSession(
+  userId: string,
   containerId: string
 ): Promise<ChatSession> {
-  const sessionId = `${containerId}-${Date.now()}`;
   const session: ChatSession = {
-    id: sessionId,
+    id: `${containerId}-${Date.now()}`,
+    userId,
     containerId,
     messages: [],
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
-
-  chatSessions.set(sessionId, session);
+  dbSave(session);
   return session;
 }
 
 export function getChatSession(sessionId: string): ChatSession | undefined {
-  return chatSessions.get(sessionId);
+  return dbGetById(sessionId);
 }
 
-export function getOrCreateChatSession(containerId: string): ChatSession {
-  const existingSession = Array.from(chatSessions.values()).find(
-    (session) => session.containerId === containerId
-  );
+export function getOrCreateChatSession(
+  userId: string,
+  containerId: string
+): ChatSession {
+  const existing = dbGet(userId, containerId);
+  if (existing) return existing;
 
-  if (existingSession) {
-    return existingSession;
-  }
-
-  const sessionId = `${containerId}-${Date.now()}`;
   const session: ChatSession = {
-    id: sessionId,
+    id: `${containerId}-${Date.now()}`,
+    userId,
     containerId,
     messages: [],
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
-
-  chatSessions.set(sessionId, session);
+  dbSave(session);
   return session;
 }
 
@@ -111,11 +155,12 @@ function buildMessageContent(
 }
 
 export async function sendMessage(
+  userId: string,
   containerId: string,
   userMessage: string,
   attachments: Attachment[] = []
 ): Promise<{ userMessage: Message; assistantMessage: Message }> {
-  const session = getOrCreateChatSession(containerId);
+  const session = getOrCreateChatSession(userId, containerId);
 
   const userMsg: Message = {
     id: `user-${Date.now()}`,
@@ -170,19 +215,18 @@ ${codeContext}`;
 
   session.messages.push(assistantMsg);
   session.updatedAt = new Date().toISOString();
+  dbSave(session);
 
-  return {
-    userMessage: userMsg,
-    assistantMessage: assistantMsg,
-  };
+  return { userMessage: userMsg, assistantMessage: assistantMsg };
 }
 
 export async function* sendMessageStream(
+  userId: string,
   containerId: string,
   userMessage: string,
   attachments: Attachment[] = []
 ): AsyncGenerator<{ type: "user" | "assistant" | "done"; data: any }> {
-  const session = getOrCreateChatSession(containerId);
+  const session = getOrCreateChatSession(userId, containerId);
 
   const userMsg: Message = {
     id: `user-${Date.now()}`,
@@ -254,6 +298,7 @@ ${codeContext}`;
 
   session.messages.push(finalAssistantMsg);
   session.updatedAt = new Date().toISOString();
+  dbSave(session);
 
   yield { type: "done", data: finalAssistantMsg };
 }

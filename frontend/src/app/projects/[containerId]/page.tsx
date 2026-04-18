@@ -1,4 +1,5 @@
 import { WorkspaceDashboard } from "../components/WorkspaceDashboard";
+import ProtectedRoute from "../../../components/ProtectedRoute";
 
 interface ContainerPageProps {
   params: Promise<{
@@ -9,5 +10,9 @@ interface ContainerPageProps {
 export default async function ContainerPage({ params }: ContainerPageProps) {
   const { containerId } = await params;
 
-  return <WorkspaceDashboard containerId={containerId} />;
+  return (
+    <ProtectedRoute>
+      <WorkspaceDashboard containerId={containerId} />
+    </ProtectedRoute>
+  );
 }

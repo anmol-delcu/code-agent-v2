@@ -1,5 +1,69 @@
 const API_BASE_URL = "/api";
 
+function getAuthToken(): string | null {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem("auth_token");
+}
+
+function authHeaders(): Record<string, string> {
+  const token = getAuthToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+// --- Auth types ---
+
+export interface AuthUser {
+  id: string;
+  email: string;
+  name: string | null;
+}
+
+export interface AuthResponse {
+  success: boolean;
+  token: string;
+  user: AuthUser;
+}
+
+// --- Auth API ---
+
+export async function apiSignup(
+  email: string,
+  password: string,
+  name?: string
+): Promise<AuthResponse> {
+  const res = await fetch(`${API_BASE_URL}/auth/signup`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password, name }),
+  });
+  const data = await res.json();
+  if (!data.success) throw new Error(data.error || "Signup failed");
+  return data;
+}
+
+export async function apiLogin(
+  email: string,
+  password: string
+): Promise<AuthResponse> {
+  const res = await fetch(`${API_BASE_URL}/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password }),
+  });
+  const data = await res.json();
+  if (!data.success) throw new Error(data.error || "Login failed");
+  return data;
+}
+
+export async function apiGetMe(): Promise<AuthUser> {
+  const res = await fetch(`${API_BASE_URL}/auth/me`, {
+    headers: { ...authHeaders() },
+  });
+  const data = await res.json();
+  if (!data.success) throw new Error(data.error || "Not authenticated");
+  return data.user;
+}
+
 export interface Container {
   id: string;
   name: string;
@@ -89,6 +153,7 @@ async function fetchApi<T>(
   const response = await fetch(`${API_BASE_URL}${endpoint}`, {
     headers: {
       "Content-Type": "application/json",
+      ...authHeaders(),
       ...options?.headers,
     },
     ...options,
@@ -173,6 +238,7 @@ export function sendChatMessageStream(
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      ...authHeaders(),
     },
     body: JSON.stringify({ message, attachments, stream: true }),
     signal: abortController.signal,

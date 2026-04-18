@@ -123,7 +123,8 @@ export async function buildImage(containerId: string): Promise<string> {
 
 export async function createContainer(
   imageName: string,
-  containerId: string
+  containerId: string,
+  userId: string
 ): Promise<{ container: Docker.Container; port: number }> {
   const containerName = `delcu-${containerId}`;
   const assignedPort = await findAvailablePort();
@@ -141,6 +142,7 @@ export async function createContainer(
       project: "december",
       type: "nextjs-app",
       assignedPort: assignedPort.toString(),
+      userId,
     },
   });
 
@@ -210,12 +212,14 @@ function getPortFromContainer(containerInfo: any): number {
 }
 
 export async function stopAllRunningProjectContainers(
+  userId: string,
   exceptContainerId?: string
 ): Promise<void> {
-  const containers = await docker.listContainers({ all: false }); // running only
+  const containers = await docker.listContainers({ all: false });
   const projectContainers = containers.filter(
     (c) =>
       c.Names?.some((name) => name.replace(/^\//, "").startsWith("delcu-")) &&
+      c.Labels?.userId === userId &&
       c.Id !== exceptContainerId
   );
 
@@ -283,11 +287,14 @@ export function getContainer(containerId: string): Docker.Container {
 
 export { docker };
 
-export async function listProjectContainers(): Promise<any[]> {
+export async function listProjectContainers(userId: string): Promise<any[]> {
   const containers = await docker.listContainers({ all: true });
 
-  const projectContainers = containers.filter((container) =>
-    container.Names?.some((name) => name.replace(/^\//, "").startsWith("delcu-"))
+  const projectContainers = containers.filter(
+    (container) =>
+      container.Names?.some((name) =>
+        name.replace(/^\//, "").startsWith("delcu-")
+      ) && container.Labels?.userId === userId
   );
 
   return projectContainers.map((container) => {
@@ -303,7 +310,9 @@ export async function listProjectContainers(): Promise<any[]> {
       image: container.Image,
       created: new Date(container.Created * 1000).toISOString(),
       assignedPort,
-      url: assignedPort ? `http://${process.env.PUBLIC_HOST || "localhost"}:${assignedPort}` : null,
+      url: assignedPort
+        ? `http://${process.env.PUBLIC_HOST || "localhost"}:${assignedPort}`
+        : null,
       ports:
         container.Ports?.map((port) => ({
           private: port.PrivatePort,
