@@ -1,6 +1,6 @@
 "use client";
 
-import { Calendar, LogOut, MoreHorizontal, Play, Square, Trash2 } from "lucide-react";
+import { Calendar, MoreHorizontal, Play, Square, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import {
   Container,
@@ -9,10 +9,8 @@ import {
   startContainer,
   stopContainer,
 } from "../../../lib/backend/api";
-import { useAuth } from "../../../contexts/AuthContext";
 
 export const ProjectsGrid = () => {
-  const { user, logout } = useAuth();
   const [containers, setContainers] = useState<Container[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -167,20 +165,6 @@ export const ProjectsGrid = () => {
 
   return (
     <div className="space-y-3">
-      {user && (
-        <div className="flex items-center justify-between pb-2 mb-1 border-b border-white/5">
-          <span className="text-xs text-zinc-500">
-            {user.name || user.email}
-          </span>
-          <button
-            onClick={logout}
-            className="flex items-center gap-1.5 text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
-          >
-            <LogOut className="w-3.5 h-3.5" />
-            Sign out
-          </button>
-        </div>
-      )}
       {containers.map((container) => (
         <div
           key={container.id}

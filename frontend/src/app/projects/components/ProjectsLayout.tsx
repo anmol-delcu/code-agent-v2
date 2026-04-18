@@ -1,13 +1,17 @@
 "use client";
 
 import Link from "next/link";
+import { LogOut } from "lucide-react";
 import { ReactNode } from "react";
+import { useAuth } from "../../../contexts/AuthContext";
 
 interface ProjectsLayoutProps {
   children: ReactNode;
 }
 
 export const ProjectsLayout = ({ children }: ProjectsLayoutProps) => {
+  const { user, logout } = useAuth();
+
   return (
     <div className="min-h-screen bg-black text-white">
       <div className="absolute inset-0 bg-black" />
@@ -45,6 +49,21 @@ export const ProjectsLayout = ({ children }: ProjectsLayoutProps) => {
                 >
                   Projects
                 </Link>
+
+                {user && (
+                  <div className="flex items-center gap-3 pl-4 border-l border-zinc-800">
+                    <span className="text-sm text-zinc-400">
+                      {user.name || user.email}
+                    </span>
+                    <button
+                      onClick={logout}
+                      className="flex items-center gap-1.5 text-xs text-zinc-500 hover:text-zinc-200 transition-colors"
+                    >
+                      <LogOut className="w-3.5 h-3.5" />
+                      Sign out
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           </div>
