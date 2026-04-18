@@ -20,7 +20,7 @@ export default function SignupPage() {
     setIsLoading(true);
     try {
       await signup(email, password, name || undefined);
-      router.push("/projects");
+      router.push("/");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Signup failed");
     } finally {
